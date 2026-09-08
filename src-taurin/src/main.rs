@@ -102,10 +102,7 @@ fn allowed(entry: &Value) -> bool {
         };
 
         if matches_os {
-            allow = r
-                .get("action")
-                .and_then(Value::as_str)
-                == Some("allow");
+            allow = r.get("action").and_then(Value::as_str) == Some("allow");
         }
     }
 
@@ -173,11 +170,15 @@ fn collect_args(
     out
 }
 
-fn safe_extract<R: Read>(
-    mut zip: zip::read::ZipFile<'_, R>,
+/*
+ * Исправлено под zip 2.4.2:
+ * ZipFile больше НЕ принимает generic R.
+ */
+fn safe_extract(
+    mut zip: zip::read::ZipFile<'_>,
     root: &Path,
 ) -> Result<(), String> {
-    let name = zip.name().replace('\\', '/');
+    let name = zip.name().replace('\\', "/");
 
     if name.starts_with('/') || name.contains("../") {
         return Err("Опасный путь внутри natives-архива".into());
@@ -335,21 +336,17 @@ fn list_instance_files(
 
     let mods = dir.join("mods");
 
-    fs::create_dir_all(&mods)
-        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&mods).map_err(|e| e.to_string())?;
 
     let mut list = Vec::new();
 
-    for e in fs::read_dir(&mods)
-        .map_err(|e| e.to_string())?
-    {
+    for e in fs::read_dir(&mods).map_err(|e| e.to_string())? {
         let e = e.map_err(|e| e.to_string())?;
         let p = e.path();
 
         if p.is_file() {
             list.push(json!({
-                "name": p
-                    .file_name()
+                "name": p.file_name()
                     .unwrap_or_default()
                     .to_string_lossy(),
                 "size": fs::metadata(&p)
@@ -405,8 +402,7 @@ fn install_mod(
         .join(&id)
         .join("mods");
 
-    fs::create_dir_all(&dir)
-        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     download_to(&url, &dir.join(safe))
 }
@@ -426,8 +422,7 @@ fn install_minecraft(
 
     let game = instance.join("game");
 
-    fs::create_dir_all(&game)
-        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&game).map_err(|e| e.to_string())?;
 
     let manifest = http_json(MANIFEST_URL)?;
 
@@ -489,8 +484,9 @@ fn install_minecraft(
 
     let mut native_urls = Vec::new();
 
-    if let Some(arr) =
-        meta.get("libraries").and_then(Value::as_array)
+    if let Some(arr) = meta
+        .get("libraries")
+        .and_then(Value::as_array)
     {
         for lib in arr {
             if !allowed(lib) {
@@ -517,12 +513,14 @@ fn install_minecraft(
     for u in native_urls {
         let bytes = http_get(&u)?;
 
-        let mut z =
-            zip::ZipArchive::new(Cursor::new(bytes))
-                .map_err(|e| e.to_string())?;
+        let mut z = zip::ZipArchive::new(
+            Cursor::new(bytes)
+        )
+        .map_err(|e| e.to_string())?;
 
         for i in 0..z.len() {
-            let f = z.by_index(i)
+            let f = z
+                .by_index(i)
                 .map_err(|e| e.to_string())?;
 
             if f.name().starts_with("META-INF/") {
@@ -555,19 +553,19 @@ fn install_minecraft(
 
         download_to(au, &ip)?;
 
-        let data: Value =
-            serde_json::from_slice(
-                &fs::read(&ip)
-                    .map_err(|e| e.to_string())?,
-            )
-            .map_err(|e| e.to_string())?;
+        let data: Value = serde_json::from_slice(
+            &fs::read(&ip).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
 
-        if let Some(objects) =
-            data.get("objects").and_then(Value::as_object)
+        if let Some(objects) = data
+            .get("objects")
+            .and_then(Value::as_object)
         {
             for (_, o) in objects {
-                if let Some(h) =
-                    o.get("hash").and_then(Value::as_str)
+                if let Some(h) = o
+                    .get("hash")
+                    .and_then(Value::as_str)
                 {
                     if h.len() < 2 {
                         continue;
@@ -632,8 +630,9 @@ fn install_minecraft(
 
         let profile = http_json(&profile_url)?;
 
-        if let Some(arr) =
-            profile.get("libraries").and_then(Value::as_array)
+        if let Some(arr) = profile
+            .get("libraries")
+            .and_then(Value::as_array)
         {
             download_library_list(arr, &libs)?;
         }
@@ -687,8 +686,7 @@ fn launch_instance(
         .join("versions")
         .join(&version);
 
-    let meta_path = vdir
-        .join(format!("{}.json", version));
+    let meta_path = vdir.join(format!("{}.json", version));
 
     if !meta_path.exists() {
         return Err(
@@ -697,16 +695,15 @@ fn launch_instance(
         );
     }
 
-    let meta: Value =
-        serde_json::from_slice(
-            &fs::read(&meta_path)
-                .map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?;
+    let meta: Value = serde_json::from_slice(
+        &fs::read(&meta_path)
+            .map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
 
     let java = java_from_path(java_path.as_deref())
         .ok_or(
-            "Java не найдена. Укажи путь к javaw.exe в настройках или установи Java.",
+            "Java не найдена. Укажи путь к javaw.exe в настройках или установи Java."
         )?;
 
     let assets = meta
@@ -798,20 +795,22 @@ fn launch_instance(
 
     let mut cp = Vec::new();
 
-    if let Some(arr) =
-        meta.get("libraries").and_then(Value::as_array)
+    if let Some(arr) = meta
+        .get("libraries")
+        .and_then(Value::as_array)
     {
         for lib in arr {
             if !allowed(lib) {
                 continue;
             }
 
-            if let Some(p) =
-                artifact_path(lib, &game.join("libraries"))
-            {
+            if let Some(p) = artifact_path(
+                lib,
+                &game.join("libraries"),
+            ) {
                 if p.exists() {
                     cp.push(
-                        p.to_string_lossy().to_string(),
+                        p.to_string_lossy().to_string()
                     );
                 }
             }
@@ -858,28 +857,28 @@ fn launch_instance(
             );
         }
 
-        let fm: Value =
-            serde_json::from_slice(
-                &fs::read(fp)
-                    .map_err(|e| e.to_string())?,
-            )
-            .map_err(|e| e.to_string())?;
+        let fm: Value = serde_json::from_slice(
+            &fs::read(fp)
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
 
-        if let Some(arr) =
-            fm.get("libraries").and_then(Value::as_array)
+        if let Some(arr) = fm
+            .get("libraries")
+            .and_then(Value::as_array)
         {
             for lib in arr {
                 if !allowed(lib) {
                     continue;
                 }
 
-                if let Some(p) =
-                    artifact_path(lib, &game.join("libraries"))
-                {
+                if let Some(p) = artifact_path(
+                    lib,
+                    &game.join("libraries"),
+                ) {
                     if p.exists() {
                         cp.push(
-                            p.to_string_lossy()
-                                .to_string(),
+                            p.to_string_lossy().to_string()
                         );
                     }
                 }
@@ -960,16 +959,18 @@ fn launch_instance(
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            launcher_info,
-            create_instance,
-            list_instance_files,
-            open_instance,
-            install_mod,
-            install_minecraft,
-            find_java,
-            launch_instance
-        ])
+        .invoke_handler(
+            tauri::generate_handler![
+                launcher_info,
+                create_instance,
+                list_instance_files,
+                open_instance,
+                install_mod,
+                install_minecraft,
+                find_java,
+                launch_instance
+            ],
+        )
         .run(tauri::generate_context!())
         .expect("error while running Sakura Launcher");
 }
